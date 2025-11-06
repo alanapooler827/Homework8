@@ -1,0 +1,147 @@
+---
+title: "Basic Modeling Practice"
+author: "Alana Pooler"
+date: "11-05-2025"
+format: html
+---
+
+Import libraries
+```{r}
+library(tidyverse)
+```
+
+
+## Read in data
+```{r}
+df <- read_csv("SeoulBikeData.csv", locale = locale(encoding = "ISO-8859-1"))
+
+# View first rows of data
+head(df)
+```
+
+## EDA and Cleaning
+
+Check for missing values
+There are no missing values in any column
+```{r}
+sum_na <- function(column){
+ sum(is.na(column))
+}
+
+df |> summarize(across(everything(), sum_na))
+```
+
+Display column types
+3 categorical variables, 10 numeric variables, 1 character variable (needs to be converted to date)
+```{r}
+sapply(df, class)
+```
+Convert date column from character to date
+```{r}
+df$Date <- dmy(df$Date)
+```
+
+Convert categorical variables to factors and rename columns to be consistent & easy to use
+```{r}
+df <- df |>
+  # convert categorical variables to factors
+  mutate(across(c('Seasons', 'Holiday', 'Functioning Day'), as.factor)) |>
+  # rename columns
+  rename('date' = 'Date',
+         'rented_bike_count' = 'Rented Bike Count',
+         'hour' = 'Hour',
+         'temp' = 'Temperature(°C)',
+         'humidity' = 'Humidity(%)',
+         'wind_speed' = 'Wind speed (m/s)',
+         'visibility' = 'Visibility (10m)',
+         'dew_pt_temp' = 'Dew point temperature(°C)',
+         'solar_rad' = 'Solar Radiation (MJ/m2)',
+         'rainfall' = 'Rainfall(mm)',
+         'snowfall' = 'Snowfall (cm)',
+         'seasons' = 'Seasons',
+         'holiday' = 'Holiday',
+         'functioning_day' = 'Functioning Day')
+```
+
+Check variable to make sure the values make sense
+
+Make contingency tables for categorical variables to see unique values
+```{r}
+table(df$seasons)
+table(df$holiday)
+table(df$functioning_day)
+```
+Calculate the mean and median for each numeric variable to check for inconsistencies
+```{r}
+df |>
+  summarise(across(where(is.numeric), list(mean = mean, median = median)))
+```
+I'm not a weather expert, but everything looks good to me!
+
+#### Summary statistics
+
+Mean and median Bike Rental Count by Functioning Day:
+There are no bike rentals when function_day equals no. 
+```{r}
+df |>
+  group_by(functioning_day) |>
+  summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
+```
+
+Mean and median Bike Rental Count by Holiday:
+Bike Rental Counts are lower on holidays, as would be expected
+```{r}
+df |>
+  group_by(holiday) |>
+  summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
+```
+
+
+Mean and median Bike Rental Count by Season:
+Bike Rental Counts are lowest in winter and highest in summer, as would be expected.
+```{r}
+df |>
+  group_by(seasons) |>
+  summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
+```
+
+Bike Rental Count by Hour:
+There are a lot more bike rentals late at night than I anticipated. There is a spike at 8am and another starting at 17 (5pm) that last until 21/22 (9/10pm)- probably people commuting to and from work and getting dinner.
+```{r}
+df |>
+  group_by(hour) |>
+  summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
+```
+
+Since we are interested in bike rental counts and there are no bike rentals when function_day = 'No', we will remove those observations
+```{r}
+df <- df |>
+  filter(functioning_day == 'Yes')
+```
+
+
+Summarize variables across hours so that each day has one record
+```{r}
+data <- df |>
+  group_by(date, seasons, holiday) |>
+  summarize(
+    across(
+      c(rented_bike_count, rainfall, snowfall),
+      ~ sum(.x),
+      .names = "total_{.col}"
+  ),
+    across(
+      c(temp, humidity, wind_speed, visibility, dew_pt_temp, solar_rad, rainfall, snowfall),
+      ~ mean(.x),
+      .names = "mean_{.col}")
+  )
+```
+
+Recreate summary stats using aggregated data
+
+
+
+
+
+
+
