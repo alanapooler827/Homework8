@@ -6,23 +6,28 @@ format: html
 ---
 
 Import libraries
+
 ```{r}
 library(tidyverse)
+library(tidymodels)
+library(ggplot2)
 ```
 
+Read in data
 
-## Read in data
 ```{r}
 df <- read_csv("SeoulBikeData.csv", locale = locale(encoding = "ISO-8859-1"))
 
-# View first rows of data
+# View first few rows of data
 head(df)
 ```
 
 ## EDA and Cleaning
 
 Check for missing values
+
 There are no missing values in any column
+
 ```{r}
 sum_na <- function(column){
  sum(is.na(column))
@@ -32,16 +37,21 @@ df |> summarize(across(everything(), sum_na))
 ```
 
 Display column types
+
 3 categorical variables, 10 numeric variables, 1 character variable (needs to be converted to date)
+
 ```{r}
 sapply(df, class)
 ```
-Convert date column from character to date
+
+Convert date column from character type to date
+
 ```{r}
 df$Date <- dmy(df$Date)
 ```
 
 Convert categorical variables to factors and rename columns to be consistent & easy to use
+
 ```{r}
 df <- df |>
   # convert categorical variables to factors
@@ -58,30 +68,36 @@ df <- df |>
          'solar_rad' = 'Solar Radiation (MJ/m2)',
          'rainfall' = 'Rainfall(mm)',
          'snowfall' = 'Snowfall (cm)',
-         'seasons' = 'Seasons',
+         'season' = 'Seasons',
          'holiday' = 'Holiday',
          'functioning_day' = 'Functioning Day')
 ```
 
-Check variable to make sure the values make sense
+#### Check variable to make sure the values make sense
 
 Make contingency tables for categorical variables to see unique values
+
 ```{r}
-table(df$seasons)
+table(df$season)
 table(df$holiday)
 table(df$functioning_day)
 ```
-Calculate the mean and median for each numeric variable to check for inconsistencies
+
+Calculate measures of center for each numeric variable to check for inconsistencies
+
 ```{r}
 df |>
   summarise(across(where(is.numeric), list(mean = mean, median = median)))
 ```
+
 I'm not a weather expert, but everything looks good to me!
 
 #### Summary statistics
 
 Mean and median Bike Rental Count by Functioning Day:
-There are no bike rentals when function_day equals no. 
+
+There are no bike rentals when function_day equals no.
+
 ```{r}
 df |>
   group_by(functioning_day) |>
@@ -89,24 +105,29 @@ df |>
 ```
 
 Mean and median Bike Rental Count by Holiday:
+
 Bike Rental Counts are lower on holidays, as would be expected
+
 ```{r}
 df |>
   group_by(holiday) |>
   summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
 ```
 
-
 Mean and median Bike Rental Count by Season:
+
 Bike Rental Counts are lowest in winter and highest in summer, as would be expected.
+
 ```{r}
 df |>
-  group_by(seasons) |>
+  group_by(season) |>
   summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
 ```
 
 Bike Rental Count by Hour:
+
 There are a lot more bike rentals late at night than I anticipated. There is a spike at 8am and another starting at 17 (5pm) that last until 21/22 (9/10pm)- probably people commuting to and from work and getting dinner.
+
 ```{r}
 df |>
   group_by(hour) |>
@@ -114,16 +135,17 @@ df |>
 ```
 
 Since we are interested in bike rental counts and there are no bike rentals when function_day = 'No', we will remove those observations
+
 ```{r}
 df <- df |>
   filter(functioning_day == 'Yes')
 ```
 
-
 Summarize variables across hours so that each day has one record
+
 ```{r}
 data <- df |>
-  group_by(date, seasons, holiday) |>
+  group_by(date, season, holiday) |>
   summarize(
     across(
       c(rented_bike_count, rainfall, snowfall),
@@ -133,15 +155,248 @@ data <- df |>
     across(
       c(temp, humidity, wind_speed, visibility, dew_pt_temp, solar_rad, rainfall, snowfall),
       ~ mean(.x),
-      .names = "mean_{.col}")
+      .names = "mean_{.col}"),
+  .groups = 'drop')
+```
+
+#### Recreate summary stats using aggregated data
+
+Measures of spread center for total rented bike count
+
+```{r}
+data |>
+  summarize(
+    mean_rental_ct = mean(total_rented_bike_count),
+    med_rental_ct = median(total_rented_bike_count),
+    sd_rental_ct = sd(total_rented_bike_count)
   )
 ```
 
-Recreate summary stats using aggregated data
+**Contingency Tables**
 
+Avg bike rental count by holiday
 
+```{r}
+data |>
+  group_by(holiday) |>
+  summarize(
+    mean_rental_ct = mean(total_rented_bike_count),
+    med_rental_ct = median(total_rented_bike_count)
+  )
+```
 
+Average bike rental count by season
 
+```{r}
+data |>
+  group_by(season) |>
+  summarize(
+    mean_rental_ct = mean(total_rented_bike_count),
+    med_rental_ct = median(total_rented_bike_count)
+  )
+```
 
+**Graphical Summaries**
 
+Daily bike rentals over time, colored by season
 
+There is a clear seasonal trend to this data. Bike rentals peak in early summer, drop in late summer, rise again in autumn, and fall again in winter.
+
+```{r}
+ggplot(data, aes(x = date, y = total_rented_bike_count, color = season)) +
+  geom_line() +
+  labs(title = 'Daily Bike Rentals Over Time',
+       x = 'Date',
+       y = 'Total Bike Rentals')
+```
+
+Daily bike rentals vs mean temperature
+
+There is a clear correlation between bike rentals and temperature. The correlation is positive (bike rentals increase as temp increases) until it hits around 75 degrees, when bike rentals start dropping as temperature continues rising.
+
+```{r}
+ggplot(data, aes(x = mean_temp, y = total_rented_bike_count, color = season)) +
+  geom_point() +
+  labs(title = 'Daily Bike Rentals vs. Mean Daily Temperature')
+```
+
+Correlation between numeric variables
+
+Based on previous summaries, these correlations are about what I'd expect. Temperature and rented bike count have the highest correlation (aside from obviously associated weather variables like temperature and dew point temp). Mean humidity has a lower correlation with rented bike count than I anticipated, as I hate humid weather, so I'd be inside!
+
+```{r}
+data |>
+  select(where(is.numeric)) |>
+  cor(use = 'complete.obs')
+```
+
+## Predictive Modeling
+
+Set the seed to ensure results are reproducible
+
+```{r}
+set.seed(42)
+```
+
+#### Prepare data for modeling
+
+Split the data into training and test set
+
+```{r}
+# put 75% of the data in the training set
+data_split <- initial_split(data, prop = .75, strata = season)
+
+# create data frames for the two sets
+train <- training(data_split)
+test <- testing(data_split)
+```
+
+Create 10 fold cross validation split on the training data
+
+There will be 26 observations per fold, except for the last one, which will have 29 observations.
+
+```{r}
+# get fold sizes
+size_fold <- floor(nrow(train)/10)
+
+# set up 10 fold cross validation
+train_10_fold <- vfold_cv(train, 10)
+```
+
+#### Fit MLR Models
+
+**Recipe 1**
+
+```{r}
+rec1 <- recipe(total_rented_bike_count ~ ., data = train) |>
+  # create day of week variable
+  step_date(date, features = 'dow') |>
+  # convert to weekday/weekend factor
+  step_mutate(
+    day_type = factor(
+      if_else(date_dow %in% c('Sat', 'Sun'), 'Weekend', 'Weekday')
+    )
+  ) |>
+  # remove date and intermediate date variable created by step_date
+  step_rm(date, date_dow) |>
+  # standardize numeric variables
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(season, holiday, day_type)
+```
+
+**Recipe 2:** Add interaction terms
+
+```{r}
+# use first recipe as base for second recipe
+rec2 <- rec1 |>
+  step_interact(~ starts_with('season_'):starts_with('holiday_') +
+                  starts_with('season_'):mean_temp +
+                  mean_temp:mean_rainfall)
+```
+
+**Recipe 3:** Add quadratic terms for each numeric predictor
+
+```{r}
+rec3 <- rec2 |>
+  step_poly(
+    all_numeric_predictors(),
+    # do not add quadratic term for dummy variables 
+    -starts_with("season_"),
+    -starts_with("holiday_"),
+    -starts_with("day_type"),
+    degree = 2
+  )
+```
+
+Set up linear model fit
+
+```{r}
+mod <- linear_reg() |>
+ set_engine('lm')
+```
+
+Create workflow and fit model with recipe 1
+
+```{r}
+# workflow
+wflow1 <- 
+  workflow() |>
+  add_model(mod) |>
+  add_recipe(rec1)
+
+# fit model using 10 fold CV
+cv_fits1 <- wflow1 |>
+  fit_resamples(
+    resamples = train_10_fold
+  )
+
+# view metrics
+collect_metrics(cv_fits1)
+```
+
+Create workflow and fit model with recipe 2
+
+```{r}
+# workflow
+wflow2 <- 
+  workflow() |>
+  add_model(mod) |>
+  add_recipe(rec2)
+
+# fit model using 10 fold CV
+cv_fits2 <- wflow2 |>
+  fit_resamples(
+    resamples = train_10_fold
+  )
+
+# view metrics
+collect_metrics(cv_fits2)
+```
+
+Create workflow and fit model with recipe 3
+
+```{r}
+# workflow
+wflow3 <- 
+  workflow() |>
+  add_model(mod) |>
+  add_recipe(rec3)
+
+# fit model using 10 fold CV
+cv_fits3 <- wflow3 |>
+  fit_resamples(
+    resamples = train_10_fold
+  )
+
+# view metrics
+collect_metrics(cv_fits3)
+```
+
+Recipe 2 has the lowest RMSE and highest R squared. This means that the difference between the observed and predicted values is smallest and the correlation between observed and predicted values is largest using recipe 2. We will continue with that recipe.
+
+------------------------------------------------------------------------
+
+Fit the model to the entire training set using recipe 2
+
+The evaluation metrics for this model are not quite as good as the evaluation metrics we got when we fit the model using recipe 2 using 10 fold CV. This could suggest overfitting, but the difference in performance is small enough that we are probably fine. Since the metrics we saw previously are the average of the performance of 10 splits, it is expected to see a slight reduction in performance when we run the model on the entire training set and evaluate it just once on the testing set.
+
+```{r}
+wflow_final <- workflow() |>
+  add_model(mod) |>
+  add_recipe(rec2)
+
+# fit on training data, evaluate on test data
+final_fit <- wflow_final |>
+  last_fit(data_split)
+
+# view metrics (RMSE, R², etc.)
+collect_metrics(final_fit)
+```
+
+Obtain coefficients for final model fit
+
+```{r}
+final |>
+  extract_fit_parsnip() |>
+  tidy()
+```
