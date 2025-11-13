@@ -38,19 +38,21 @@ df |> summarize(across(everything(), sum_na))
 
 Display column types
 
-3 categorical variables, 10 numeric variables, 1 character variable (needs to be converted to date)
+4 categorical variables, 10 numeric variables
+
+We will convert 3 of the character variables (holiday, functioning day, and seasons) to factors. The last character variable, Date, needs to be converted as well.
 
 ```{r}
 sapply(df, class)
 ```
 
-Convert date column from character type to date
+Convert date from a character variable to a date for use in later steps.
 
 ```{r}
 df$Date <- dmy(df$Date)
 ```
 
-Convert categorical variables to factors and rename columns to be consistent & easy to use
+Convert remaining 3 categorical variables to factors, rename columns to be consistent & easy to use
 
 ```{r}
 df <- df |>
@@ -77,6 +79,12 @@ df <- df |>
 
 Make contingency tables for categorical variables to see unique values
 
+-   levels of 'Seasons': Autumn, Spring, Summer, Winter
+
+-   levels of 'Holiday': Holiday, No Holiday
+
+-   levels of 'Functioning Day': Yes, No
+
 ```{r}
 table(df$season)
 table(df$holiday)
@@ -94,9 +102,9 @@ I'm not a weather expert, but everything looks good to me!
 
 #### Summary statistics
 
-Mean and median Bike Rental Count by Functioning Day:
+Mean and median Bike Rental Count by Functioning Day
 
-There are no bike rentals when function_day equals no.
+-   There are no bike rentals when function_day equals no
 
 ```{r}
 df |>
@@ -104,9 +112,9 @@ df |>
   summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
 ```
 
-Mean and median Bike Rental Count by Holiday:
+Mean and median Bike Rental Count by Holiday
 
-Bike Rental Counts are lower on holidays, as would be expected
+-   Bike Rental Counts are lower on holidays, as would be expected
 
 ```{r}
 df |>
@@ -114,9 +122,9 @@ df |>
   summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
 ```
 
-Mean and median Bike Rental Count by Season:
+Mean and median Bike Rental Count by Season
 
-Bike Rental Counts are lowest in winter and highest in summer, as would be expected.
+-   Bike Rental Counts are lowest in winter and highest in summer, as would be expected
 
 ```{r}
 df |>
@@ -134,7 +142,7 @@ df |>
   summarize(mean_rental_ct = mean(rented_bike_count), med_rental_ct = median(rented_bike_count))
 ```
 
-Since we are interested in bike rental counts and there are no bike rentals when function_day = 'No', we will remove those observations
+Since we are interested in bike rental counts and there are no bike rentals when function_day = 'No', we will remove those observations.
 
 ```{r}
 df <- df |>
@@ -142,6 +150,10 @@ df <- df |>
 ```
 
 Summarize variables across hours so that each day has one record
+
+-   Calculate daily totals of rented bike count, rainfall, and snowfall
+
+-   Calculate daily averages of all 8 weather related variables.
 
 ```{r}
 data <- df |>
@@ -161,7 +173,7 @@ data <- df |>
 
 #### Recreate summary stats using aggregated data
 
-Measures of spread center for total rented bike count
+Measures of spread center for total daily rented bike count
 
 ```{r}
 data |>
@@ -176,6 +188,8 @@ data |>
 
 Avg bike rental count by holiday
 
+-   We see the same pattern of more bike rentals when there is no holiday
+
 ```{r}
 data |>
   group_by(holiday) |>
@@ -186,6 +200,8 @@ data |>
 ```
 
 Average bike rental count by season
+
+-   We see the same pattern of the most bike rentals in the summer and the least by far in the winter
 
 ```{r}
 data |>
@@ -240,7 +256,7 @@ set.seed(42)
 
 #### Prepare data for modeling
 
-Split the data into training and test set
+Split the data into a training and test set using 75% of the data for the training set
 
 ```{r}
 # put 75% of the data in the training set
@@ -253,7 +269,7 @@ test <- testing(data_split)
 
 Create 10 fold cross validation split on the training data
 
-There will be 26 observations per fold, except for the last one, which will have 29 observations.
+There will be 26 observations per fold, except for the last fold, which will have 29 observations.
 
 ```{r}
 # get fold sizes
@@ -308,14 +324,14 @@ rec3 <- rec2 |>
   )
 ```
 
-Set up linear model fit
+Set up linear model fit to use when fitting models
 
 ```{r}
 mod <- linear_reg() |>
  set_engine('lm')
 ```
 
-Create workflow and fit model with recipe 1
+Create workflow and fit model using recipe 1
 
 ```{r}
 # workflow
@@ -334,7 +350,7 @@ cv_fits1 <- wflow1 |>
 collect_metrics(cv_fits1)
 ```
 
-Create workflow and fit model with recipe 2
+Create workflow and fit model using recipe 2
 
 ```{r}
 # workflow
@@ -353,7 +369,7 @@ cv_fits2 <- wflow2 |>
 collect_metrics(cv_fits2)
 ```
 
-Create workflow and fit model with recipe 3
+Create workflow and fit model using recipe 3
 
 ```{r}
 # workflow
